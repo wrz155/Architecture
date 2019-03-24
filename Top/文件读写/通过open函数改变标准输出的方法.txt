@@ -1,0 +1,22 @@
+int main(void)
+{
+	char s[] = "abc.txt";
+	int i = 0;
+
+	close(STDOUT_FILENO);//关闭标准输出文件描述符
+	int fd1 = open("/dev/pts/1", O_WRONLY);//打开设备文件/dev/pts/1，该设备将做为标准输出文件描述符
+	int fd = open(s, O_RDONLY);//
+	if (fd == -1)
+	{
+		printf("%s\n", strerror(errno));//
+	}else
+	{
+		while(1)
+		{
+			printf("fd1 = %d, fd = %d:%d\n", fd1, fd, i++);//printf语句将会打印到/dev/pts/1上
+			sleep(1);//
+		}
+		close(fd);
+	}
+	return EXIT_SUCCESS;
+}

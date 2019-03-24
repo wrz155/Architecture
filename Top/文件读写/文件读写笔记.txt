@@ -1,0 +1,236 @@
+
+//读文件的代码
+
+int main(int arg, char *args[])
+{
+	if (arg < 2)
+		return 0;
+	int fd = open(args[1], O_RDONLY); //只读方式打开文件abc.txt
+	if (fd == -1)
+	{
+		printf("error is %s\n", strerror(errno));
+	} else
+	{
+		printf("success fd = %d\n", fd);
+		char buf[100];
+		memset(buf, 0, sizeof(buf));
+		while(read(fd, buf, sizeof(buf) - 1) > 0)//循环读取文件内容，直到文件结尾，退出循环
+		{
+			printf("%s\n", buf);
+			memset(buf, 0, sizeof(buf));
+		}
+		close(fd);
+	}
+	return 0;
+}
+
+//写文件的代码
+
+int main(int arg, char *args[])
+{
+	char s[] = "abc.txt";
+	int fd = open(s, O_RDWR | O_APPEND);//用读写追加方式打开文件
+	if (fd == -1)
+	{
+		printf("error is %s\n", strerror(errno));
+	}else
+	{
+		printf("success fd = %d\n", fd);
+		char buf[100];
+		memset(buf, 0, sizeof(buf));
+		strcpy(buf, "hello world\n");
+		int i = write(fd, buf, strlen(buf));//这里要用strlen函数
+		close(fd);
+	}
+	return 0;
+}
+
+
+//得到文件状态代码
+
+int main(int arg, char *args[])
+{
+	int fd = open(args[1], O_RDONLY);
+	if (fd == -1)
+	{
+		printf("error is %s\n", strerror(errno));
+	}else
+	{
+		printf("success fd = %d\n", fd);
+		struct stat buf;
+		fstat(fd, &buf);
+		if (S_ISREG(buf.st_mode))//判断文件是否为标准文件
+		{
+			printf("%s is charfile\n", args[1]);
+		}
+		if (S_ISDIR(buf.st_mode))//判断文件是否为目录
+		{
+			printf("%s is dir\n", args[1]);
+		}
+
+		printf("%s size =%d\n", args[1], buf.st_size);//得到文件大小
+
+		close(fd);
+	}
+	return 0;
+}
+
+
+//C库函数读取文件的代码
+int main(int arg, char *args[])
+{
+	FILE *p = fopen(args[1], "r+");
+	if (p == NULL)
+	{
+		printf("error is %s\n", strerror(errno));
+	}else
+	{
+		printf("success\n");
+		char buf[100];
+		size_t rc = 0;
+		while(1)
+		{
+			size_t tmp = fread(buf, 1, sizeof(buf), p);//原则是第二个参数乘以第三个参数的大小不能超过缓冲区
+			rc += tmp;
+			if (tmp == 0)
+				break;
+
+		}
+		printf("rc = %d\n", rc);
+		fclose(p);
+	}
+	return 0;
+}
+
+
+//c库函数读写二进制文件的代码
+
+struct person
+{
+	int id;
+	char name[20];
+	int age;
+	int sex;
+	char tel[20];
+};
+
+
+int main(int arg, char *args[])
+{
+	FILE *p = fopen(args[1], "w");
+	if (p == NULL)
+	{
+		printf("error is %s\n", strerror(errno));
+	} else
+	{
+		printf("success\n");
+		struct person man;
+		memset(&man, 0, sizeof(man));
+
+		while(fread(&man, sizeof(struct person), 1, p))
+		{
+			printf("id=%d\n", man.id);
+			printf("name=%s\n", man.name);
+			printf("age=%d\n", man.age);
+			printf("tel=%s\n", man.tel);
+		}
+		fclose(p);
+	}
+	return 0;
+}
+
+int main(int arg, char *args[])
+{
+	FILE *p = fopen(args[1], "w");
+	if (p == NULL)
+	{
+		printf("error is %s\n", strerror(errno));
+	} else
+	{
+		printf("success\n");
+		struct person man[10];
+		memset(&man, 0, sizeof(man));
+
+		man[0].id = 0;
+		strcpy(man[0].name, "苍井空");
+		man[0].age = 50;
+		man[0].sex = 1;
+		strcpy(man[0].tel, "911");
+
+		man[1].id = 1;
+		strcpy(man[1].name, "饭岛爱");
+		man[1].age = 20;
+		man[1].sex = 0;
+		strcpy(man[1].tel, "119");
+
+		fwrite(&man, sizeof(struct person), 2, p);
+		fclose(p);
+	}
+	return 0;
+}
+
+//写log的代码
+void writelog(const char *log)
+{
+	time_t tDate;
+	struct tm *eventTime;
+	time(&tDate);//得到系统当前时间
+	eventTime = localtime(&tDate);//将time_t数据类型转化为struct tm结构
+	int iYear = eventTime->tm_year + 1900;
+	int iMon = eventTime->tm_mon + 1;
+	int iDay = eventTime->tm_mday;
+	int iHour = eventTime->tm_hour;
+	int iMin = eventTime->tm_min;
+	int iSec = eventTime->tm_sec;
+
+	printf("tm_isdst = %d\n", eventTime->tm_isdst);
+
+	char sDate[16];
+	sprintf(sDate, "%04d-%02d-%02d", iYear, iMon, iDay);
+	char sTime[16];
+	sprintf(sTime, "%02d:%02d:%02d", iHour, iMin, iSec);
+	char s[1024];
+	sprintf(s, "%s %s %s\n", sDate, sTime, log);
+	FILE *p = fopen("my.log", "a+");
+	if (p == NULL)
+	{
+		printf("write log my.log error:%s\n", strerror(errno));
+	}else
+	{
+		fputs(s, p);
+		fclose(p);
+	}
+	return;
+}
+
+//读目录的代码
+
+int main(int arg, char *args[])
+{
+	if (arg <2)
+		return 0;
+
+	DIR *dp;
+	struct dirent *dirp;
+	dp = opendir(args[1]);//打开目录文件
+	if (dp == NULL)
+	{
+		printf("error is %s\n", strerror(errno));
+		return 0;
+	}
+
+	while((dirp = readdir(dp)) != NULL)//用readdir循环读取目录内容，读到目录尾，循环break
+	{
+		printf("%s\n", dirp->d_name);//将目录下的文件名打印到屏幕
+
+	}
+
+	closedir(dp);//关闭目录
+
+	return 0;
+}
+
+
+
+
+
