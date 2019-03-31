@@ -1,5 +1,5 @@
 ﻿/*
-@ 单例：饿汉式
+@ 单例：饿汉式：		程序运行时就创建好
 @ 构造方法：
 	在懒汉式的基础上，将类中定义一个静态指针直接指向本类（不管本类有没有new对象）
 
@@ -12,15 +12,15 @@
 #include <iostream>
 using namespace std;
 
-class Singelton
+class Singleton
 {
 private:
-	Singelton()
+	Singleton()									// C++的构造函数 不能保证是线程安全
 	{
 		cout << "Singelton 构造函数执行" << endl;
 	}
 public:
-	static Singelton *GetSingelton()
+	static Singleton *GetSingelton()
 	{
 		return singelton_;
 	}
@@ -35,17 +35,17 @@ public:
 	}
 
 private:
-	static Singelton *singelton_;
+	static Singleton *singelton_;
 };
 
-Singelton *Singelton::singelton_ = new Singelton();
+Singleton *Singleton::singelton_ = new Singleton();
 
 void main()
 {
 	//验证类的构造函数是在hello world之前调用
 	printf("hello world\n");
-	Singelton *p1 = Singelton::GetSingelton();
-	Singelton::FreeSingelton();
+	Singleton *single = Singleton::GetSingelton();
+	Singleton::FreeSingelton();
 
 	return;
 }

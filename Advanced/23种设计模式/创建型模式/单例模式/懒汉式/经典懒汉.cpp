@@ -1,5 +1,5 @@
 /*
-@ 单例：懒汉式
+@ 单例：懒汉式			使用的时候，手动创建
 @ 构造方法：
 	1)构造函数私有化
 	2)提供一个全局的静态方法（全局访问点）
@@ -9,19 +9,19 @@
 #include <iostream>
 using namespace std;
 
-class Singelton
+class Singleton
 {
 private:
-	Singelton()
+	Singleton()
 	{
 		cout << "Singelton 构造函数执行" << endl;
 	}
 public:
-	static Singelton *get_singelton()
+	static Singleton *get_singelton()
 	{
 		if (singelton_ == NULL)
 		{
-			singelton_ = new Singelton;
+			singelton_ = new Singleton;
 		}
 		return singelton_;
 	}
@@ -36,15 +36,15 @@ public:
 	}
 
 private:
-	static Singelton *singelton_;
+	static Singleton *singelton_;
 };
 
-Singelton *Singelton::singelton_ = NULL;
+Singleton *Singleton::singelton_ = NULL;
 
 
-void main01()
+void main()
 {
-	Singelton *p1 = Singelton::get_singelton();
-	Singelton::FreeSingelton();
+	Singleton *single = Singleton::get_singelton();
+	single->FreeSingelton();
 
 }

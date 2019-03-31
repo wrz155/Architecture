@@ -18,37 +18,82 @@
 */
 //开发底层库（开发接口），提供的是一种机制 ，而不是某种具体的策略。
 
-//动态库变成框架 
-//1 第三方业务入口传进来（回调函数的入口地址传进来）
-
-//2 加密 解密 业务模型抽象
 //实现 动态库 加密解密业务模型抽象
 typedef int (*EncData)(unsigned char *inData,int inDataLen,unsigned char *outData,int *outDataLen,void *Ref, int RefLen);
 typedef int (*DecData)(unsigned char *inData,int inDataLen,unsigned char *outData,int *outDataLen,void *Ref, int RefLen);
 
 
-
 typedef struct _SCK_HANDLE {
-	char	version[16];
-	char	serverip[16];
+	char		version[16];
+	char		serverip[16];
 	int		serverport;
 	unsigned char *	buf ;
 	int				buflen;
 
-	//wangbaoming 20140404 add
-	EncData                  myEncDataFunc;
-	void					*encRef;
-	int						encRefLen;
+	//加密的环境
+	 EncData encDataCallbak;
+	 void *Encref;
+	 int EncLen;
 
-	DecData                   myDecDataFunc;
-	void					*decRef;
-	int						decRefLen;
+	 //解密的环境
 
-
+	 DecData decDataCallbak;
+	 void *Decref;
+	 int DecLen;
 }SCK_HANDLE;
 
 
-
+//实现了 把上层应用加密接口入口地址 赛入到动态库 里面
+ITCAST_FUNC_EXPORT(int)
+clitSocket_SetEncFunc(void *handle, EncData encDataCallbak, void *ref, int refLen)
+{
+	int ret = 0;
+	SCK_HANDLE *sh = NULL;
+	if (handle==NULL )
+	{
+		ret = -1;
+		return ret;
+	}
+	sh = (SCK_HANDLE *)handle;
+	sh->encDataCallbak = encDataCallbak;
+	if (ref != NULL && refLen > 0)
+	{
+		sh->Encref = (void *)malloc(refLen);
+		if (sh->Encref == NULL)
+		{
+			ret = -2;
+			return ret;
+		}
+		memcpy(sh->Encref, ref, refLen);
+		sh->EncLen = refLen;
+	}
+	return ret;
+}
+ITCAST_FUNC_EXPORT(int)
+clitSocket_SetDecFunc(void *handle, EncData decDataCallbak, void *ref, int refLen)
+{
+	int ret = 0;
+	SCK_HANDLE *sh = NULL;
+	if (handle==NULL )
+	{
+		ret = -1;
+		return ret;
+	}
+	sh = (SCK_HANDLE *)handle;
+	sh->decDataCallbak = decDataCallbak;
+	if (ref != NULL && refLen > 0)
+	{
+		sh->Decref = (void *)malloc(refLen);
+		if (sh->Decref == NULL)
+		{
+			ret = -2;
+			return ret;
+		}
+		memcpy(sh->Decref, ref, refLen);
+		sh->DecLen = refLen;
+	}
+	return ret;
+}
 
 //客户端初始化
 ITCAST_FUNC_EXPORT(int)
@@ -94,6 +139,7 @@ cltSocketSend(void *handle, unsigned char *buf,  int buflen)
 {
 	int				rv = 0;
 	SCK_HANDLE		*sh = NULL;
+	EncData		encDataCallbak;
 
 	if (handle == NULL)
 	{
@@ -107,45 +153,48 @@ cltSocketSend(void *handle, unsigned char *buf,  int buflen)
 		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend(): (buf == NULL || len<=0) [%d]", rv);
 		return rv;
 	}
-	sh = (SCK_HANDLE *)handle;
-	//如果有加密回调函数，则执行回调
-	if (sh->myEncDataFunc != NULL)
-	{
-		sh->buf = (unsigned char *)malloc(sizeof(char)*(buflen+128));
-		if (sh->buf == NULL)
-		{
-			return rv;
-		}
 
-		rv = sh->myEncDataFunc(buf, buflen, sh->buf, &(sh->buflen), sh->encRef, sh->encRefLen);
+	sh = (SCK_HANDLE *)handle;
+	sh->buf = (unsigned char *)malloc(sizeof(char)*buflen + 128);
+	if (sh->buf == NULL)
+	{
+		rv = -6;
+		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() buflen:%d)", buflen);
+		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() check (handle->buf == NULL)) [%d]", rv);
+		return rv;
+	}
+
+	//添加业务发送数据进行报文加密 modify wangbaoming 20140621
+
+	//如果设置了第三个厂商的加密函数入口，调用加密
+	if ( sh->encDataCallbak != NULL)
+	{
+		//找到第三方函数入口地址
+		encDataCallbak = sh->encDataCallbak;
+		//执行函数调用
+		rv = encDataCallbak(buf, buflen, sh->buf, &sh->buflen,sh->Encref, sh->EncLen);
 		if (rv != 0)
 		{
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend(): (sh->myEncDataFunc [%d]", rv);
+			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func encDataCallbak() buflen:%d)", buflen);
 			return rv;
 		}
 	}
 	else
 	{
-		sh->buf = (unsigned char *)malloc(sizeof(char)*buflen);
-		if (sh->buf == NULL)
-		{
-			rv = -6;
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() buflen:%d)", buflen);
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() check (handle->buf == NULL)) [%d]", rv);
-			return rv;
-		}
-
 		//把发送的报文数据，存储 handle 上下文之中
 		memcpy(sh->buf, buf, buflen);
 		sh->buflen = buflen;
 	}
+
 	return rv;
 }
+
 ITCAST_FUNC_EXPORT(int)
 cltSocketSend_enc(void *handle, unsigned char *buf,  int buflen, EncData encDataCallbakFunc, void *ref, int refLen)
 {
 	int				rv = 0;
 	SCK_HANDLE		*sh = NULL;
+	EncData		encDataCallbak;
 
 	if (handle == NULL)
 	{
@@ -159,38 +208,39 @@ cltSocketSend_enc(void *handle, unsigned char *buf,  int buflen, EncData encData
 		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend(): (buf == NULL || len<=0) [%d]", rv);
 		return rv;
 	}
-	sh = (SCK_HANDLE *)handle;
-	//如果有加密回调函数，则执行回调
-	if (sh->myEncDataFunc != NULL)
-	{
-		sh->buf = (unsigned char *)malloc(sizeof(char)*(buflen+128));
-		if (sh->buf == NULL)
-		{
-			return rv;
-		}
 
-		rv = encDataCallbakFunc(buf, buflen, sh->buf, &(sh->buflen), ref, refLen);
+	sh = (SCK_HANDLE *)handle;
+	sh->buf = (unsigned char *)malloc(sizeof(char)*buflen + 128);
+	if (sh->buf == NULL)
+	{
+		rv = -6;
+		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() buflen:%d)", buflen);
+		ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() check (handle->buf == NULL)) [%d]", rv);
+		return rv;
+	}
+
+	//添加业务发送数据进行报文加密 modify wangbaoming 20140621
+
+	//如果设置了第三个厂商的加密函数入口，调用加密
+	if ( encDataCallbakFunc != NULL)
+	{
+		//找到第三方函数入口地址
+		encDataCallbak = encDataCallbakFunc;
+		//执行函数调用
+		rv = encDataCallbak(buf, buflen, sh->buf, &sh->buflen,sh->Encref, sh->EncLen);
 		if (rv != 0)
 		{
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend(): (sh->myEncDataFunc [%d]", rv);
+			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func encDataCallbak() buflen:%d)", buflen);
 			return rv;
 		}
 	}
 	else
 	{
-		sh->buf = (unsigned char *)malloc(sizeof(char)*buflen);
-		if (sh->buf == NULL)
-		{
-			rv = -6;
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() buflen:%d)", buflen);
-			ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func cltSocketSend() check (handle->buf == NULL)) [%d]", rv);
-			return rv;
-		}
-
 		//把发送的报文数据，存储 handle 上下文之中
 		memcpy(sh->buf, buf, buflen);
 		sh->buflen = buflen;
 	}
+
 	return rv;
 }
 //客户端收报文
@@ -215,14 +265,30 @@ cltSocketRev(void *handle, unsigned char *buf, int *buflen)
 
 	sh = (SCK_HANDLE *)handle;
 
-	//赋值 把上下文中的数据，copy到buf空间中
-	//支持二次调用，第一次调用求长度 第二次调用可以把数据copy buf中
-	if (buf != NULL)
+	//如果设置解密入口地址 
+	if (sh->decDataCallbak != NULL)
 	{
-		memcpy(buf, sh->buf, sh->buflen);
-		//buf[ci->buflen] = '\0';
+		if (buf != NULL)
+		{
+			rv = sh->decDataCallbak(sh->buf, sh->buflen, buf, buflen, sh->Decref, sh->DecLen);
+			if (rv != 0)
+			{
+				ITCAST_LOG(__FILE__, __LINE__,LogLevel[4], rv,"func decDataCallbak: (buflen == NULL) [%d]", rv);
+				return rv;
+			}
+		}
 	}
-	*buflen = sh->buflen;
+	else
+	{
+		//赋值 把上下文中的数据，copy到buf空间中
+		//支持二次调用，第一次调用求长度 第二次调用可以把数据copy buf中
+		if (buf != NULL)
+		{
+			memcpy(buf, sh->buf, sh->buflen);
+			//buf[ci->buflen] = '\0';
+		}
+		*buflen = sh->buflen;
+	}
 
 	return rv;
 }
@@ -234,8 +300,14 @@ cltSocketDestory(void *handle)
 	sh = handle; 
 	if (sh != NULL)
 	{
-		if (sh->encRef != NULL)  free(sh->encRef);
-		if (sh->decRef != NULL)  free(sh->decRef);
+		if (sh->Encref != NULL)
+		{
+			free(sh->Encref);
+		}
+		if (sh->Decref != NULL)
+		{
+			free(sh->Decref);
+		}
 		if (sh->buf != NULL) free(sh->buf);
 		free(sh);
 	}
@@ -372,7 +444,6 @@ cltSocketRev2_Free(unsigned char **buf)
 		free(tmp);
 	}
 	*buf = NULL;
-	return 0;
 }
 
 //客户端释放资源
@@ -387,29 +458,6 @@ cltSocketDestory2(void **handle)
 		free(sh);
 	}
 	*handle = NULL;
-	return 0;
-}
-
-
-ITCAST_FUNC_EXPORT(int)
-clitSocket_SetEncFunc(void *handle, EncData encDataCallbak, void *ref, int refLen)
-{
-	
-	SCK_HANDLE *sh = NULL;
-	sh = (SCK_HANDLE *)handle;
-	sh->myEncDataFunc  = encDataCallbak;
-
-	if (refLen > 0)
-	{
-		sh->encRef = (void *)malloc(refLen);
-		if (sh->encRef  == NULL)
-		{
-			return -1;
-		}
-		memcpy(sh->encRef, ref, refLen);
-		sh->encRefLen = refLen;
-	}
-
 	return 0;
 }
 
